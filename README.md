@@ -1,31 +1,27 @@
-# Evilginx3 PhishLab
+# Evilginx3PhishLab
 
-This setup script provisions a complete phishing simulation environment using Evilginx3, Gophish, and Mailhog on a Linux VPS. It is intended strictly for testing and research purposes in a controlled environment.
+This repository includes a tested and production-ready setup script for deploying a phishing simulation environment using Evilginx3 (v3.3.0), Gophish, and Mailhog on Ubuntu 20.04. It is designed for testing and red team labs with your own domain and VPS.
 
-## Overview
+## What's Included
 
-The lab is designed to simulate real-world credential harvesting and MiTM (man-in-the-middle) scenarios for red team training or tool evaluation. It supports phishing infrastructure setup using a real domain and SSL with Let's Encrypt.
-
-## Components Installed
-
-- **Evilginx3** – HTTPS reverse proxy framework for phishing and session hijacking.
-- **Gophish** – Phishing campaign and template manager (Admin UI exposed on port 8800).
-- **Mailhog** – Lightweight SMTP server with a web UI for testing email delivery (port 8025).
+- **Evilginx3 v3.3.0** – Go-based reverse proxy phishing framework with 2FA bypass support and Let's Encrypt auto-certification.
+- **Gophish** – Campaign management and phishing delivery platform.
+- **Mailhog** – Lightweight SMTP server and webmail UI for testing phishing emails.
+- **Firewall (UFW)** – Configured to only allow necessary ports (22, 80, 443, 8800, 8025).
+- **Service validation** – Confirms Evilginx3 binary exists, and Gophish and Mailhog services are running.
 
 ## Requirements
 
-- Ubuntu 20.04 x64
-- Root access
-- A domain name with two A-records:
-  - `login.yourdomain.com`
-  - `static.yourdomain.com`
-- Ports 80 and 443 must be open for Let's Encrypt validation
+- A VPS (e.g., Vultr) running Ubuntu 20.04 x64
+- Root SSH access
+- A domain name with A-records pointing to your VPS:
+  - `login.example.com`
+  - `static.example.com`
+- Ports 80 and 443 open to the internet
 
-## Usage
+## Installation
 
-1. Point your domain and subdomains to the VPS IP.
-2. SSH into your server as root.
-3. Run the setup script:
+SSH into your VPS as `root` and run:
 
-   ```bash
-   bash <(curl -sSL https://raw.githubusercontent.com/CyberOneHQ/Evilginx3PhishLab/refs/heads/main/install.sh)
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/CyberOneHQ/Evilginx3PhishLab/refs/heads/main/install.sh)
