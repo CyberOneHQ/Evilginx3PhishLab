@@ -1,5 +1,5 @@
 #!/bin/bash
-# ==== Evilginx2 v3.3.0 + Gophish + Mailhog Setup Script (Ubuntu 20.04, Vultr) ====
+# ==== Evilginx3 (v3.3.0) + Gophish + Mailhog Setup Script (Ubuntu 20.04, Vultr) ====
 
 set -e
 
@@ -11,6 +11,8 @@ GOPHISH_PORT=8800
 MAILHOG_PORT=8025
 GOPHISH_USER="admin"
 GOPHISH_PASS="$(openssl rand -hex 12)"
+EVILGINX_DIR="/opt/evilginx2"
+PHISHLETS_PATH="$EVILGINX_DIR/phishlets"
 
 # ==== Update & Install Base Packages ====
 apt update && apt upgrade -y
@@ -22,19 +24,22 @@ cd /tmp
 curl -LO https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz
 rm -rf /usr/local/go && tar -C /usr/local -xzf go$GO_VERSION.linux-amd64.tar.gz
 
-# Add Go to PATH permanently
+# Add Go to PATH permanently and for current session
 echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
 chmod +x /etc/profile.d/go.sh
 export PATH=$PATH:/usr/local/go/bin
 
-# ==== Install Evilginx2 v3.3.0 ====
+# ==== Install Evilginx3 (v3.3.0 from kgretzky repo) ====
 cd /opt
-git clone --branch v3.3.0 https://github.com/kgretzky/evilginx2.git
-cd evilginx2
-make build
-setcap cap_net_bind_service=+ep /opt/evilginx2/dist/evilginx
+rm -rf $EVILGINX_DIR
+git clone --branch v3.3.0 https://github.com/kgretzky/evilginx2.git $EVILGINX_DIR
+cd $EVILGINX_DIR
+mkdir -p dist
 
-# ==== Evilginx2 Auto Config ====
+go build -o dist/evilginx main.go
+setcap cap_net_bind_service=+ep dist/evilginx
+
+# ==== Evilginx Auto Config File ====
 cat <<EOF > /root/evilginx2_autosetup.txt
 config domain $DOMAIN
 config ip $(curl -s ifconfig.me)
@@ -101,12 +106,12 @@ systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable --now gophish mailhog
 
-# ==== Done ====
-echo "\n Setup Complete!"
-echo "Evilginx path: /opt/evilginx2/dist/evilginx"
-echo "Run it manually: /opt/evilginx2/dist/evilginx"
-echo "Auto setup commands in: /root/evilginx2_autosetup.txt"
+# ==== Completion Output ====
+echo "\n✅ Setup Complete!"
+echo "Evilginx path: $EVILGINX_DIR/dist/evilginx"
+echo "Run it with phishlets: $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH"
+echo "Auto-setup commands stored in: /root/evilginx2_autosetup.txt"
 echo "Gophish UI: http://$(curl -s ifconfig.me):$GOPHISH_PORT"
 echo "Mailhog UI: http://$(curl -s ifconfig.me):$MAILHOG_PORT"
 echo "Gophish credentials saved in /root/gophish-credentials.txt"
-echo " Remember to run Evilginx interactively to load phishlets."
+echo "To apply Evilginx config: type 'source /root/evilginx2_autosetup.txt' inside Evilginx prompt."
