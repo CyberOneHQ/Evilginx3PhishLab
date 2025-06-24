@@ -33,7 +33,7 @@ This setup is **not intended** for production deployment or unauthorized testing
 
 ---
 
-## 🖥 System Requirements
+##  System Requirements
 
 - Ubuntu 20.04 x64 VPS (tested on Vultr)
 - Root SSH access
