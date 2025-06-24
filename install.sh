@@ -16,7 +16,7 @@ PHISHLETS_PATH="$EVILGINX_DIR/phishlets"
 
 # ==== Update & Install Base Packages ====
 apt update && apt upgrade -y
-apt install -y git make curl unzip ufw build-essential ca-certificates gnupg lsb-release libcap2-bin
+apt install -y git make curl unzip ufw build-essential ca-certificates gnupg lsb-release libcap2-bin net-tools
 
 # ==== Install Go 1.22.3 ====
 GO_VERSION="1.22.3"
@@ -106,8 +106,36 @@ systemctl daemon-reexec
 systemctl daemon-reload
 systemctl enable --now gophish mailhog
 
+# ==== Post-Install: Service Verification ====
+echo "\nVerifying service availability..."
+
+# Check Evilginx3 binary
+if [ -f "$EVILGINX_DIR/dist/evilginx" ]; then
+  echo "✔ Evilginx binary exists: $EVILGINX_DIR/dist/evilginx"
+else
+  echo "✖ Evilginx binary not found. Check build logs."
+fi
+
+# Check Gophish service
+if systemctl is-active --quiet gophish; then
+  echo "✔ Gophish service is running"
+else
+  echo "✖ Gophish service failed to start"
+fi
+
+# Check Mailhog service
+if systemctl is-active --quiet mailhog; then
+  echo "✔ Mailhog service is running"
+else
+  echo "✖ Mailhog service failed to start"
+fi
+
+# Port checks
+echo "\nActive listeners:"
+netstat -tuln | grep -E ":(80|443|$GOPHISH_PORT|$MAILHOG_PORT)"
+
 # ==== Completion Output ====
-echo "\n Setup Complete!"
+echo "\nSetup Complete!"
 echo "Evilginx path: $EVILGINX_DIR/dist/evilginx"
 echo "Run it with phishlets: $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH"
 echo "Auto-setup commands stored in: /root/evilginx2_autosetup.txt"
