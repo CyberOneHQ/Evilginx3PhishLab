@@ -1,4 +1,4 @@
-# Evilginx3PhishLab
+# Evilginx3 PhishLab
 
 This setup script provisions a complete phishing simulation environment using Evilginx3, Gophish, and Mailhog on a Linux VPS. It is intended strictly for testing and research purposes in a controlled environment.
 
