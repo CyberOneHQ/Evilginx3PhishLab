@@ -107,7 +107,7 @@ systemctl daemon-reload
 systemctl enable --now gophish mailhog
 
 # ==== Completion Output ====
-echo "\n✅ Setup Complete!"
+echo "\n Setup Complete!"
 echo "Evilginx path: $EVILGINX_DIR/dist/evilginx"
 echo "Run it with phishlets: $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH"
 echo "Auto-setup commands stored in: /root/evilginx2_autosetup.txt"
