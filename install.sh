@@ -88,6 +88,15 @@ else
   echo "Evilginx3 binary already exists, skipping build."
 fi
 
+# ==== Copy Bundled Phishlets ====
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -d "$SCRIPT_DIR/phishlets" ]; then
+  echo "Copying bundled phishlets..."
+  cp "$SCRIPT_DIR"/phishlets/*.yaml "$PHISHLETS_PATH/" 2>/dev/null || true
+  chown -R "$SERVICE_USER":"$SERVICE_USER" "$PHISHLETS_PATH"
+  echo "Phishlets installed: $(ls "$PHISHLETS_PATH"/*.yaml 2>/dev/null | wc -l) files"
+fi
+
 # ==== Evilginx Config Commands Reference ====
 cat <<EOF > /root/evilginx_setup_commands.txt
 # Run these commands inside the Evilginx interactive prompt:
@@ -213,7 +222,7 @@ for svc in evilginx gophish mailhog; do
   if systemctl is-active --quiet "$svc"; then
     echo "[OK] $svc is running"
   else
-    echo "[FAIL] $svc failed to start — check: journalctl -u $svc"
+    echo "[FAIL] $svc failed to start - check: journalctl -u $svc"
   fi
 done
 
@@ -244,7 +253,7 @@ echo "Gophish:      http://127.0.0.1:$GOPHISH_PORT (access via SSH tunnel)"
 echo "  SSH tunnel: ssh -L $GOPHISH_PORT:127.0.0.1:$GOPHISH_PORT root@$PUBLIC_IP"
 echo "  Username:   admin"
 if [ -n "$GOPHISH_INITIAL_PASS" ]; then
-  echo "  Password:   $GOPHISH_INITIAL_PASS (initial — you will be prompted to change it)"
+  echo "  Password:   $GOPHISH_INITIAL_PASS (initial - you will be prompted to change it)"
 else
   echo "  Password:   Check with: journalctl -u gophish | grep password"
 fi
