@@ -140,30 +140,29 @@ The `phishlets/` directory contains 11 pre-configured phishlets ready for use wi
 
 ### Native Evilginx3 (min_ver 3.0.0+)
 
-| Phishlet | Target | Key Tokens | Source |
-|----------|--------|------------|--------|
-| `microsoft-live.yaml` | login.live.com | SDIDC, JSHP | SimplerHacking |
-| `microsoft-o365-adfs.yaml` | login.microsoftonline.com + ADFS | ESTSAUTH, ESTSAUTHPERSISTENT | SimplerHacking |
-| `okta.yaml` | Okta tenants (template) | idx | SimplerHacking |
-| `twitter.yaml` | twitter.com / X | kdt, auth_token, ct0, twid | SimplerHacking |
-| `linkedin.yaml` | linkedin.com (with evilpuppet) | li_at | SimplerHacking/Rencora |
+| Phishlet | Target | Key Tokens |
+|----------|--------|------------|
+| `microsoft-live.yaml` | login.live.com | SDIDC, JSHP |
+| `microsoft-o365-adfs.yaml` | login.microsoftonline.com + ADFS | ESTSAUTH, ESTSAUTHPERSISTENT |
+| `okta.yaml` | Okta tenants (template) | idx |
+| `twitter.yaml` | twitter.com / X | kdt, auth_token, ct0, twid |
+| `linkedin.yaml` | linkedin.com (with evilpuppet) | li_at |
 
 ### Evilginx2-Compatible (work in v3 via backward compat)
 
-| Phishlet | Target | Key Tokens | Source |
-|----------|--------|------------|--------|
-| `o365.yaml` | login.microsoftonline.com | ESTSAUTH, ESTSAUTHPERSISTENT | An0nUD4Y |
-| `google.yaml` | accounts.google.com | SID, HSID, SSID, GAPS | An0nUD4Y |
-| `github.yaml` | github.com | user_session, _gh_sess | audibleblink |
-| `facebook.yaml` | facebook.com | c_user, xs, sb | An0nUD4Y |
-| `instagram.yaml` | instagram.com | sessionid | charlesbel |
-| `aws.yaml` | signin.aws.amazon.com | aws-creds, JSESSIONID | An0nUD4Y |
+| Phishlet | Target | Key Tokens |
+|----------|--------|------------|
+| `o365.yaml` | login.microsoftonline.com | ESTSAUTH, ESTSAUTHPERSISTENT |
+| `google.yaml` | accounts.google.com | SID, HSID, SSID, GAPS |
+| `github.yaml` | github.com | user_session, _gh_sess |
+| `facebook.yaml` | facebook.com | c_user, xs, sb |
+| `instagram.yaml` | instagram.com | sessionid |
+| `aws.yaml` | signin.aws.amazon.com | aws-creds, JSESSIONID |
 
 ### Notes
 
 - **Okta** requires replacing `<okta-tenant-placeholder>` with your target's tenant name
 - **O365 ADFS** requires replacing `example.com` with the actual ADFS domain
-- Phishlets sourced from [simplerhacking/Evilginx3-Phishlets](https://github.com/simplerhacking/Evilginx3-Phishlets), [rencora/evilginx3-phishlet-templates](https://github.com/rencora/evilginx3-phishlet-templates), and [cybersecurityteampk/evilginx3-phishlets-2025](https://github.com/cybersecurityteampk/evilginx3-phishlets-2025)
 
 ---
 
