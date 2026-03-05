@@ -3,3 +3,15 @@
 *~
 .DS_Store
 .env
+
+# Build artifacts
+dist/
+go.sum
+
+# Engagement configs (may contain secrets)
+/evilginx-lab.yaml
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm

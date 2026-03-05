@@ -114,6 +114,23 @@ EOF
 
 echo "Evilginx setup commands saved to /root/evilginx_setup_commands.txt"
 
+# ==== Build Evilginx-Lab ====
+LABDIR="$SCRIPT_DIR"
+if [ ! -f /usr/local/bin/evilginx-lab ] || [ "$LABDIR/cmd/evilginx-lab/main.go" -nt /usr/local/bin/evilginx-lab ]; then
+  echo "Building Evilginx-Lab..."
+  cd "$LABDIR"
+  apt install -y gcc libsqlite3-dev 2>/dev/null || true
+  go mod download
+  mkdir -p dist
+  CGO_ENABLED=1 go build -ldflags "-s -w" -o dist/evilginx-lab ./cmd/evilginx-lab
+  install -m 755 dist/evilginx-lab /usr/local/bin/evilginx-lab
+  mkdir -p /var/lib/evilginx-lab
+  chown "$SERVICE_USER":"$SERVICE_USER" /var/lib/evilginx-lab
+  echo "evilginx-lab binary installed to /usr/local/bin/evilginx-lab"
+else
+  echo "evilginx-lab binary is up to date, skipping build."
+fi
+
 # ==== Install Gophish ====
 GOPHISH_DIR="/opt/gophish"
 GOPHISH_URL="https://github.com/gophish/gophish/releases/download/v${GOPHISH_VERSION}/gophish-v${GOPHISH_VERSION}-linux-64bit.zip"
@@ -212,13 +229,31 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+# Evilginx-Lab dashboard service
+cat <<EOF > /etc/systemd/system/evilginx-lab.service
+[Unit]
+Description=Evilginx-Lab Dashboard
+After=network.target evilginx.service gophish.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$LABDIR
+ExecStart=/usr/local/bin/evilginx-lab deploy -c $LABDIR/evilginx-lab.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
 systemctl enable --now evilginx gophish mailhog
 
 # ==== Post-Install Verification ====
 printf "\nVerifying service availability...\n"
 
-for svc in evilginx gophish mailhog; do
+for svc in evilginx gophish mailhog evilginx-lab; do
   if systemctl is-active --quiet "$svc"; then
     echo "[OK] $svc is running"
   else
@@ -260,6 +295,19 @@ fi
 echo ""
 echo "Mailhog:      http://$PUBLIC_IP:$MAILHOG_UI_PORT"
 echo "  SMTP:       localhost:$MAILHOG_SMTP_PORT (configure as Gophish sending profile)"
+echo ""
+echo "Evilginx-Lab CLI: /usr/local/bin/evilginx-lab"
+echo "  Dashboard: http://127.0.0.1:8443 (access via SSH tunnel)"
+echo "  SSH tunnel: ssh -L 8443:127.0.0.1:8443 root@$PUBLIC_IP"
+echo "  Commands:   evilginx-lab init    - initialize engagement from evilginx-lab.yaml"
+echo "              evilginx-lab deploy  - start services + dashboard"
+echo "              evilginx-lab status  - show engagement summary"
+echo ""
+echo "Quick Start:"
+echo "  1. Copy configs/engagement.example.yaml to evilginx-lab.yaml"
+echo "  2. Edit evilginx-lab.yaml with your engagement details"
+echo "  3. Run: evilginx-lab init -c evilginx-lab.yaml"
+echo "  4. Run: evilginx-lab deploy -c evilginx-lab.yaml"
 echo ""
 echo "To configure Gophish -> Mailhog integration:"
 echo "  1. Open Gophish admin UI"
